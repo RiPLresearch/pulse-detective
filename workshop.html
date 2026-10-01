@@ -1,0 +1,744 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>html,body{margin:0}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Pulse Detective</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2034%2034%22%3E%3Crect%20width%3D%2234%22%20height%3D%2234%22%20rx%3D%229%22%20fill%3D%22%23c42f4c%22/%3E%3Cpath%20d%3D%22M4%2019h6l3-9%204%2015%203-9%202%203h8%22%20fill%3D%22none%22%20stroke%3D%22%23fff%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E">
+<meta name="description" content="Pulse Detective workshop: count heartbeats in PPG data and build a seizure alarm in Python.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a lab notebook — sticky mission rail on the left, one readable column of steps, code cells inline like a bedside monitor */
+:root {
+  --bg: #eef3f7;
+  --surface: #ffffff;
+  --ink: #132232;
+  --muted: #566577;
+  --line: #d3dde7;
+  --code-bg: #f6f8fb;
+  --accent: #c42f4c;        /* pulse red */
+  --accent-soft: #fbe7eb;
+  --on-accent: #ffffff;
+  --c1: #2f6db5;            /* rest / series 1 */
+  --c2: #c42f4c;            /* seizure / series 2 */
+  --c3: #17876a;            /* exercise / series 3 */
+  --c4: #b8730c;            /* series 4 */
+  --ok: #17876a;
+  --ok-soft: #e2f4ee;
+  --warn: #9a5b00;
+  --warn-soft: #fdf0d9;
+  --err: #b3261e;
+  --err-soft: #fde8e6;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1822; --surface: #16222f; --ink: #e6edf4; --muted: #9aaabb; --line: #2a3a4b;
+    --code-bg: #111c27; --accent: #ff6b84; --accent-soft: #3a1c25; --on-accent: #1a0a0f;
+    --c1: #6aa6ef; --c2: #ff6b84; --c3: #4ccfa6; --c4: #f0b04a;
+    --ok: #4ccfa6; --ok-soft: #12352c; --warn: #f0b04a; --warn-soft: #3a2a10; --err: #ff8a80; --err-soft: #3d1a18;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1822; --surface: #16222f; --ink: #e6edf4; --muted: #9aaabb; --line: #2a3a4b;
+  --code-bg: #111c27; --accent: #ff6b84; --accent-soft: #3a1c25; --on-accent: #1a0a0f;
+  --c1: #6aa6ef; --c2: #ff6b84; --c3: #4ccfa6; --c4: #f0b04a;
+  --ok: #4ccfa6; --ok-soft: #12352c; --warn: #f0b04a; --warn-soft: #3a2a10; --err: #ff8a80; --err-soft: #3d1a18;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 17px; line-height: 1.6; }
+.wrap { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 40px; max-width: 1120px; margin: 0 auto; padding-inline: 24px; padding-block: 28px 80px; }
+@media (max-width: 860px) { .wrap { grid-template-columns: minmax(0, 1fr); padding-inline: 16px; gap: 16px; } .rail { position: static !important; } .rail ol { display: none; } }
+
+/* rail */
+.rail { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; display: grid; gap: 18px; }
+.brand { font-family: var(--font-display); font-weight: 800; font-size: 22px; letter-spacing: -0.01em; line-height: 1.1; display: flex; align-items: center; gap: 10px; }
+.brand svg { flex: none; }
+a.brand { color: inherit; text-decoration: none; }
+.status { font-size: 14px; padding: 8px 12px; border-radius: 8px; background: var(--warn-soft); color: var(--warn); display: flex; gap: 8px; align-items: center; }
+.status.ready { background: var(--ok-soft); color: var(--ok); }
+.status.fail { background: var(--err-soft); color: var(--err); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
+.status:not(.ready):not(.fail) .dot { animation: blink 1s infinite; }
+@keyframes blink { 50% { opacity: .25; } }
+.rail ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; counter-reset: s; }
+.rail li a { display: grid; grid-template-columns: 26px 1fr auto; align-items: baseline; gap: 6px; padding: 6px 8px; border-radius: 6px; color: var(--muted); text-decoration: none; font-size: 15px; line-height: 1.3; }
+.rail li a:hover { background: var(--surface); color: var(--ink); }
+.rail li a .n { font-family: var(--font-mono); font-size: 12px; }
+.rail li a .t { font-family: var(--font-mono); font-size: 11px; opacity: .8; }
+.rail li.done a { color: var(--ok); }
+.rail li.done a .n::after { content: " ✓"; }
+
+/* content */
+main { min-width: 0; display: grid; gap: 56px; }
+.hero { display: grid; gap: 14px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--accent); }
+h1 { font-family: var(--font-display); font-weight: 800; font-size: clamp(34px, 6vw, 54px); line-height: 1.02; letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+h2 { font-family: var(--font-display); font-weight: 800; font-size: clamp(25px, 3.4vw, 32px); line-height: 1.1; letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
+h3 { font-family: var(--font-display); font-weight: 600; font-size: 20px; margin: 8px 0 0; }
+p { margin: 0; max-width: 66ch; }
+section { display: grid; gap: 16px; scroll-margin-top: 20px; }
+.sec-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.mins { font-family: var(--font-mono); font-size: 13px; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: 1px 10px; }
+.lede { font-size: 19px; color: var(--muted); }
+code { font-family: var(--font-mono); font-size: .86em; background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+ul.tasks { margin: 0; padding-left: 22px; display: grid; gap: 6px; max-width: 66ch; }
+.patient { display: grid; grid-template-columns: auto 1fr; gap: 18px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
+.patient .tag { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.patient strong { font-family: var(--font-display); font-size: 22px; }
+.avatar { width: 58px; height: 58px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-family: var(--font-display); font-weight: 800; font-size: 24px; }
+.note { border-left: 3px solid var(--c1); padding: 4px 0 4px 14px; color: var(--muted); max-width: 66ch; }
+.note b { color: var(--ink); }
+.hint { font-size: 15px; }
+details.hint summary { cursor: pointer; color: var(--c1); font-weight: 700; }
+details.hint > div { margin-top: 8px; padding: 10px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+
+/* code cells */
+.cell { border: 1px solid var(--line); border-radius: 10px; background: var(--code-bg); overflow: hidden; }
+.cell.ran { border-color: color-mix(in srgb, var(--ok) 50%, var(--line)); }
+.cell.errored { border-color: color-mix(in srgb, var(--err) 60%, var(--line)); }
+.cell-bar { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-bottom: 1px solid var(--line); background: var(--surface); flex-wrap: wrap; }
+.cell-bar .label { font-family: var(--font-mono); font-size: 12px; color: var(--muted); margin-right: auto; padding-left: 4px; }
+button { font: inherit; cursor: pointer; }
+.run { font-family: var(--font-body); font-weight: 700; font-size: 15px; background: var(--accent); color: var(--on-accent); border: 0; border-radius: 6px; padding: 5px 14px; display: inline-flex; gap: 6px; align-items: center; }
+.run:disabled { opacity: .5; cursor: wait; }
+.run:hover:not(:disabled) { filter: brightness(1.08); }
+.ghost { background: transparent; border: 1px solid var(--line); color: var(--muted); border-radius: 6px; padding: 4px 10px; font-size: 13px; }
+.ghost:hover { color: var(--ink); }
+button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 3px solid color-mix(in srgb, var(--c1) 55%, transparent); outline-offset: 2px; }
+textarea.code { display: block; width: 100%; border: 0; resize: none; background: transparent; color: var(--ink); font-family: var(--font-mono); font-size: 14.5px; line-height: 1.55; padding: 12px 14px; tab-size: 4; white-space: pre; overflow-x: auto; overflow-y: hidden; min-height: 3em; }
+textarea.code:focus-visible { outline: none; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--c1) 45%, transparent); }
+.out { border-top: 1px dashed var(--line); background: var(--surface); padding: 10px 14px; display: grid; gap: 10px; }
+.out:empty { display: none; }
+.out pre { margin: 0; font-family: var(--font-mono); font-size: 14px; white-space: pre-wrap; word-break: break-word; }
+.out .err { background: var(--err-soft); color: var(--err); border-radius: 6px; padding: 8px 12px; font-size: 15px; }
+.out .err pre { color: var(--err); opacity: .85; margin-top: 4px; font-size: 13px; }
+.kbd { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+
+/* plots */
+figure.plot { margin: 0; }
+figure.plot svg { width: 100%; height: auto; display: block; }
+figure.plot .ttl { font-family: var(--font-display); font-weight: 600; font-size: 15px; margin-bottom: 2px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); }
+.legend span::before { content: ""; display: inline-block; width: 14px; height: 3px; border-radius: 2px; background: var(--sw); vertical-align: middle; margin-right: 6px; }
+
+/* quiz + decision */
+.quiz { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; }
+.quiz label { font-weight: 700; flex: 1 1 260px; }
+.quiz input { width: 110px; font: inherit; padding: 5px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
+.quiz .fb { flex-basis: 100%; font-size: 15px; }
+.fb.good { color: var(--ok); } .fb.bad { color: var(--warn); }
+.cases { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.cases > * { min-width: 0; }
+@media (max-width: 520px) { .cases { grid-template-columns: minmax(0, 1fr); } }
+.case { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 10px; align-content: start; }
+.case h4 { margin: 0; font-family: var(--font-display); font-size: 19px; display: flex; justify-content: space-between; align-items: baseline; }
+.case h4 small { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-weight: 400; }
+.choice { display: flex; gap: 8px; flex-wrap: wrap; }
+.choice button { flex: 1; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 6px; padding: 6px 8px; font-size: 14px; font-weight: 700; }
+.choice button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.reveal { font-size: 15px; border-radius: 8px; padding: 10px 12px; }
+.reveal.yes { background: var(--ok-soft); }
+.reveal.no { background: var(--warn-soft); }
+.reveal b { display: block; }
+textarea.thoughts { width: 100%; min-height: 110px; font: inherit; font-size: 16px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); }
+.cheat { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 4px 16px; }
+.cheat summary { cursor: pointer; font-weight: 700; padding: 8px 0; }
+.cheat table { border-collapse: collapse; font-size: 14.5px; margin-bottom: 12px; width: 100%; }
+.cheat td { border-top: 1px solid var(--line); padding: 6px 8px 6px 0; vertical-align: top; }
+.cheat td:first-child { font-family: var(--font-mono); white-space: nowrap; }
+.tablewrap { overflow-x: auto; }
+footer { color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); padding-top: 16px; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
+
+<div class="wrap">
+  <aside class="rail">
+    <a class="brand" href="index.html" title="Back to start">
+      <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><rect width="34" height="34" rx="9" style="fill:var(--accent)"/><path d="M4 19h6l3-9 4 15 3-9 2 3h8" style="fill:none;stroke:#fff;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round"/></svg>
+      Pulse Detective
+    </a>
+    <div class="status" id="status" role="status"><span class="dot"></span><span id="status-text">Starting Python…</span></div>
+    <ol id="toc">
+      <li><a href="#start"><span class="n">0</span><span>Getting started</span><span class="t">2m</span></a></li>
+      <li><a href="#warmup"><span class="n">1</span><span>Python warm-up</span><span class="t">5m</span></a></li>
+      <li><a href="#ppg"><span class="n">2</span><span>Meet the PPG</span><span class="t">6m</span></a></li>
+      <li><a href="#beats"><span class="n">3</span><span>Teach the computer to count</span><span class="t">8m</span></a></li>
+      <li><a href="#trends"><span class="n">4</span><span>Exercise vs seizure</span><span class="t">6m</span></a></li>
+      <li><a href="#detector"><span class="n">5</span><span>Build an alarm</span><span class="t">7m</span></a></li>
+      <li><a href="#mystery"><span class="n">6</span><span>The mystery events</span><span class="t">5m</span></a></li>
+      <li><a href="#reflect"><span class="n">7</span><span>Your verdict</span><span class="t">2m</span></a></li>
+    </ol>
+  </aside>
+
+  <main>
+    <header class="hero">
+      <div class="eyebrow">Wearables + Python · 45-minute workshop</div>
+      <h1>Was it a seizure, or just a run?</h1>
+      <p class="lede">You're a data scientist at a health-tech company. A patient's smartwatch keeps flagging spikes in heart rate. Your job is to write Python that reads the watch's sensor and decides which spikes need a doctor.</p>
+      <div class="patient">
+        <div class="avatar" aria-hidden="true">S</div>
+        <div>
+          <div class="tag">PATIENT FILE</div>
+          <strong>Sam, 15</strong>
+          <p>Has epilepsy. Wears a smartwatch with a <b>PPG sensor</b> 24/7. Plays basketball, jogs to school, and sometimes has seizures, including at night when nobody sees them.</p>
+        </div>
+      </div>
+    </header>
+
+    <!-- 0 -->
+    <section id="start">
+      <div class="sec-head"><h2>0 · Getting started</h2><span class="mins">2 min</span></div>
+      <p>This page runs real Python inside your web browser. Nothing to install. Each grey box below is a <b>code cell</b>. Click <b>Run</b> (or press <span class="kbd">Shift + Enter</span> while typing in it) and the result appears underneath.</p>
+      <ul class="tasks">
+        <li>Wait until the box at the top left says <b>Python ready</b>.</li>
+        <li>Run the cell below. Then change <code>"there"</code> to your own name and run it again.</li>
+      </ul>
+      <div class="cell" data-sec="start" data-id="c0"><textarea class="code" spellcheck="false">print("Hello there!")
+print("Let's look at some heart data.")</textarea></div>
+      <p class="hint">Broke something? <b>Reset</b> puts the cell back the way it started. Your edits are saved in this browser.</p>
+    </section>
+
+    <!-- 1 -->
+    <section id="warmup">
+      <div class="sec-head"><h2>1 · Python warm-up</h2><span class="mins">5 min</span></div>
+      <p>A <b>variable</b> is a name that stores a value. Python reads your code from top to bottom, one line at a time.</p>
+      <div class="cell" data-sec="warmup" data-id="c1"><textarea class="code" spellcheck="false">name = "Sam"
+resting_hr = 72        # heart rate in beats per minute (bpm)
+
+print("Patient:", name)
+print("Resting heart rate:", resting_hr, "bpm")
+
+# How many times does Sam's heart beat in one day?
+beats_per_day = resting_hr * 60 * 24
+print("Beats per day:", beats_per_day)</textarea></div>
+      <div class="quiz" data-answer="103680" data-tol="0">
+        <label for="q1">How many beats per day if Sam's resting heart rate were 72? Check your output.</label>
+        <input id="q1" type="number" inputmode="numeric"><button class="ghost">Check</button><div class="fb" aria-live="polite"></div>
+      </div>
+      <p>A <b>list</b> holds many values in order, inside square brackets. A smartwatch saves heart rate as a long list of numbers. Python has built-in tools to summarise a list.</p>
+      <div class="cell" data-sec="warmup" data-id="c2"><textarea class="code" spellcheck="false">readings = [72, 74, 71, 73, 95, 120, 118, 90, 76]
+
+print("Number of readings:", len(readings))
+print("Highest:", max(readings))
+print("Lowest:", min(readings))
+print("First reading:", readings[0])     # Python counts from 0!
+
+plot(readings, title="My first heart-rate plot", ylabel="bpm")</textarea></div>
+      <ul class="tasks">
+        <li>Print the <b>last</b> reading. Hint: <code>readings[-1]</code></li>
+        <li>Add a number to the list and run again. Watch the plot change.</li>
+      </ul>
+    </section>
+
+    <!-- 2 -->
+    <section id="ppg">
+      <div class="sec-head"><h2>2 · Meet the PPG</h2><span class="mins">6 min</span></div>
+      <p><b>PPG</b> (photoplethysmography) is the green light on the back of a smartwatch. Every heartbeat pushes a pulse of blood through your wrist. More blood absorbs more light, so the sensor sees a wave: <b>one bump = one heartbeat</b>.</p>
+      <p>We loaded 10 seconds of Sam's PPG while sitting on the couch. It's stored in a list called <code>ppg_rest</code>, with 25 readings every second.</p>
+      <div class="cell" data-sec="ppg" data-id="c3"><textarea class="code" spellcheck="false">print("Number of readings:", len(ppg_rest))
+print("First 5 readings:", ppg_rest[:5])
+
+plot_ppg(ppg_rest, title="Sam resting: 10 seconds of PPG")</textarea></div>
+      <ul class="tasks">
+        <li>Count the <b>tall</b> peaks in the plot by eye. Ignore the small bump after each one (that's the heart valve closing).</li>
+        <li>That's beats in 10 seconds. Multiply by 6 to get beats per minute.</li>
+      </ul>
+      <div class="quiz" data-answer="72" data-tol="6">
+        <label for="q2">Sam's resting heart rate, in bpm:</label>
+        <input id="q2" type="number" inputmode="numeric"><button class="ghost">Check</button><div class="fb" aria-live="polite"></div>
+      </div>
+      <p>Now plot <code>ppg_exercise</code> (Sam jogging) and <code>ppg_seizure</code> (recorded during a seizure). Edit the cell below.</p>
+      <div class="cell" data-sec="ppg" data-id="c4"><textarea class="code" spellcheck="false">plot_ppg(ppg_exercise, title="Sam jogging")
+# add a line here to plot ppg_seizure
+</textarea></div>
+      <p class="note"><b>Think:</b> could you tell exercise and a seizure apart from 10 seconds of PPG alone? Both are fast. Keep that question in mind.</p>
+    </section>
+
+    <!-- 3 -->
+    <section id="beats">
+      <div class="sec-head"><h2>3 · Teach the computer to count beats</h2><span class="mins">8 min</span></div>
+      <p>A watch can't count by eye. We need a rule. A reading is a <b>heartbeat peak</b> if it is:</p>
+      <ul class="tasks">
+        <li>bigger than the reading just before it, <b>and</b></li>
+        <li>bigger than the reading just after it, <b>and</b></li>
+        <li>above a <b>threshold</b> (so the small bumps don't count).</li>
+      </ul>
+      <p>The <code>for</code> loop below checks every reading one by one. Fill in the blank <code>___</code> with the name of the threshold variable, then run it.</p>
+      <div class="cell" data-sec="beats" data-id="c5"><textarea class="code" spellcheck="false">def find_beats(signal, threshold=0.7):
+    beats = []
+    for i in range(1, len(signal) - 1):
+        bigger_than_before = signal[i] > signal[i - 1]
+        bigger_than_after = signal[i] > signal[i + 1]
+        tall_enough = signal[i] > ___
+        if bigger_than_before and bigger_than_after and tall_enough:
+            beats.append(i)       # remember where the beat was
+    return beats
+
+beats = find_beats(ppg_rest)
+print("Beats found:", len(beats))
+print("Heart rate:", len(beats) * 6, "bpm")
+plot_ppg(ppg_rest, beats=beats, title="Beats the computer found")</textarea></div>
+      <details class="hint"><summary>Stuck?</summary><div>The threshold is called <code>threshold</code>. So the line should read <code>tall_enough = signal[i] &gt; threshold</code>. Python is fussy: spaces at the start of a line matter, and so do colons <code>:</code> at the end of <code>def</code>, <code>for</code> and <code>if</code>.</div></details>
+      <p>Did the computer agree with your count? Now use your function on the other two recordings.</p>
+      <div class="cell" data-sec="beats" data-id="c6"><textarea class="code" spellcheck="false">exercise_beats = find_beats(ppg_exercise)
+print("Exercise heart rate:", len(exercise_beats) * 6, "bpm")
+
+# Do the same for ppg_seizure:
+</textarea></div>
+      <ul class="tasks">
+        <li><b>Experiment:</b> try <code>find_beats(ppg_rest, threshold=0.3)</code>. What goes wrong? Why do we need a threshold?</li>
+      </ul>
+      <p class="note"><b>Problem:</b> exercise and seizure both give a heart rate above 120 bpm. A single snapshot can't tell them apart. Doctors look at <b>how the heart rate changes over time</b>.</p>
+    </section>
+
+    <!-- 4 -->
+    <section id="trends">
+      <div class="sec-head"><h2>4 · Exercise vs seizure over time</h2><span class="mins">6 min</span></div>
+      <p>The watch runs your beat counter all day and saves one heart-rate reading <b>every 10 seconds</b>. Here are two 10-minute events from Sam's week that a doctor has already labelled:</p>
+      <ul class="tasks">
+        <li><code>event_jog</code>: Sam jogging to school</li>
+        <li><code>event_seizure</code>: a seizure, confirmed on video in hospital</li>
+      </ul>
+      <div class="cell" data-sec="trends" data-id="c7"><textarea class="code" spellcheck="false">plot_hr(event_jog, event_seizure, labels=["jog", "seizure"],
+        title="Two events from Sam's week")
+
+print("Jog:     start", event_jog[0], "bpm, highest", max(event_jog), "bpm")
+print("Seizure: start", event_seizure[0], "bpm, highest", max(event_seizure), "bpm")</textarea></div>
+      <p>The highest heart rates are almost the same. Look at the <b>shape</b> of each line. Zoom in on the moment each one starts by printing a slice of the list (readings 16 to 24 cover minutes 2.7 to 4):</p>
+      <div class="cell" data-sec="trends" data-id="c8"><textarea class="code" spellcheck="false">print("Jog:    ", event_jog[16:24])
+print("Seizure:", event_seizure[16:24])</textarea></div>
+      <div class="quiz" data-answer="50" data-tol="3">
+        <label for="q3">In the seizure, how much did the heart rate jump between the reading <b>before</b> it started and the very next one (10 seconds later)?</label>
+        <input id="q3" type="number" inputmode="numeric"><button class="ghost">Check</button><div class="fb" aria-live="polite"></div>
+      </div>
+      <p class="note"><b>The clue:</b> during exercise the heart speeds up <b>gradually</b> as muscles need more oxygen. In many seizures the brain's electrical storm hits the nerves that control the heart, so the rate shoots up <b>within seconds</b>, even if the person is lying still.</p>
+    </section>
+
+    <!-- 5 -->
+    <section id="detector">
+      <div class="sec-head"><h2>5 · Build a seizure alarm</h2><span class="mins">7 min</span></div>
+      <p>Let's turn that clue into code. First, a function that finds the <b>biggest jump</b> between any two readings next to each other. Fill in the blank.</p>
+      <div class="cell" data-sec="detector" data-id="c9"><textarea class="code" spellcheck="false">def biggest_jump(heart_rate):
+    biggest = 0
+    for i in range(1, len(heart_rate)):
+        jump = heart_rate[i] - heart_rate[i - 1]
+        if jump > biggest:
+            biggest = ___         # we found a new biggest jump. Save it!
+    return biggest
+
+print("Jog biggest jump:    ", biggest_jump(event_jog), "bpm")
+print("Seizure biggest jump:", biggest_jump(event_seizure), "bpm")</textarea></div>
+      <details class="hint"><summary>Stuck?</summary><div>When <code>jump</code> is bigger than the biggest so far, it becomes the new biggest: <code>biggest = jump</code></div></details>
+      <p>Now the alarm. If the biggest jump is above a threshold, the watch sends an alert. Pick a threshold that sits between the jog and the seizure numbers you just printed.</p>
+      <div class="cell" data-sec="detector" data-id="c10"><textarea class="code" spellcheck="false">THRESHOLD = 30     # bpm in 10 seconds. You can change this!
+
+def seizure_alarm(heart_rate):
+    jump = biggest_jump(heart_rate)
+    if jump > THRESHOLD:
+        return "ALERT: possible seizure (jump of " + str(jump) + " bpm)"
+    else:
+        return "no alarm (biggest jump " + str(jump) + " bpm)"
+
+print("Jog:    ", seizure_alarm(event_jog))
+print("Seizure:", seizure_alarm(event_seizure))</textarea></div>
+      <p>If the jog gives <b>no alarm</b> and the seizure gives an <b>ALERT</b>, your alarm works on the training data. Time for the real test.</p>
+    </section>
+
+    <!-- 6 -->
+    <section id="mystery">
+      <div class="sec-head"><h2>6 · The mystery events</h2><span class="mins">5 min</span></div>
+      <p>Sam's watch recorded four more spikes this week, labelled A to D. Nobody knows yet what happened. They're stored in a <b>dictionary</b> called <code>mysteries</code>. Run your alarm on all of them.</p>
+      <div class="cell" data-sec="mystery" data-id="c11"><textarea class="code" spellcheck="false">for label in mysteries:
+    print("Event", label, "→", seizure_alarm(mysteries[label]))
+
+plot_hr(mysteries["A"], mysteries["B"], mysteries["C"], mysteries["D"],
+        labels=["A", "B", "C", "D"], title="Mystery events")</textarea></div>
+      <div class="cell" data-sec="mystery" data-id="c12"><textarea class="code" spellcheck="false"># Too messy? Look at one event at a time:
+plot_hr(mysteries["A"], title="Event A")</textarea></div>
+      <p>Make your call for each event, then reveal what really happened. Use the plots too, not just the alarm.</p>
+      <div class="cases" id="cases"></div>
+    </section>
+
+    <!-- 7 -->
+    <section id="reflect">
+      <div class="sec-head"><h2>7 · Your verdict</h2><span class="mins">2 min</span></div>
+      <p>Discuss with the person next to you, then write a sentence or two:</p>
+      <ul class="tasks">
+        <li>Which is worse: a <b>missed seizure</b>, or a <b>false alarm</b> that wakes Sam's parents at 3 am? How would that change your threshold?</li>
+        <li>What other sensor in the watch could help? (Think: what does Sam's wrist do when jogging vs during a seizure in bed?)</li>
+      </ul>
+      <label for="thoughts" class="hint" style="font-weight:700">My verdict</label>
+      <textarea id="thoughts" class="thoughts" placeholder="I would set the threshold to… because…"></textarea>
+      <h3>Finished early? Extensions</h3>
+      <ul class="tasks">
+        <li>Change <code>THRESHOLD</code> and rerun section 6. Can you find a value that gets all four right? Why not?</li>
+        <li>Write <code>minutes_high(heart_rate)</code>: count how many readings are more than 15 bpm above the first reading, then divide by 6. Does a long high period help separate C from D?</li>
+        <li>Combine both rules into a smarter alarm: alert only if the jump is big <b>and</b> the heart rate stays high for more than one minute.</li>
+      </ul>
+      <details class="cheat">
+        <summary>Python cheat sheet</summary>
+        <div class="tablewrap"><table>
+          <tr><td>x = 5</td><td>store a value in a variable</td></tr>
+          <tr><td>print(x)</td><td>show something</td></tr>
+          <tr><td>[1, 2, 3]</td><td>a list</td></tr>
+          <tr><td>my_list[0]</td><td>first item (Python counts from 0)</td></tr>
+          <tr><td>my_list[2:5]</td><td>items 2, 3 and 4 (a slice)</td></tr>
+          <tr><td>len, max, min</td><td>length, biggest, smallest of a list</td></tr>
+          <tr><td>for i in range(5):</td><td>repeat with i = 0, 1, 2, 3, 4</td></tr>
+          <tr><td>if a &gt; b:  else:</td><td>make a decision</td></tr>
+          <tr><td>def name(input):</td><td>make your own function; <code>return</code> sends the answer back</td></tr>
+          <tr><td>plot(list)</td><td>draw any list of numbers</td></tr>
+          <tr><td>plot_ppg(signal, beats=…)</td><td>draw 10 s of PPG, optionally marking beats</td></tr>
+          <tr><td>plot_hr(a, b, labels=[…])</td><td>draw heart-rate events over 10 minutes</td></tr>
+        </table></div>
+      </details>
+      <footer>The recordings on this page are simulated, based on how heart rate behaves in real seizures and exercise. Real seizure-detection devices combine several sensors and are tested in clinical studies.</footer>
+    </section>
+  </main>
+</div>
+
+<script type="text/x-python" id="setup-py">import math, random, json
+
+FS = 25  # PPG samples per second
+
+def _pulse(phase):
+    main = math.exp(-((phase - 0.22) / 0.07) ** 2 / 2)
+    notch = 0.38 * math.exp(-((phase - 0.52) / 0.09) ** 2 / 2)
+    return main + notch
+
+def _make_ppg(bpm, seconds=10, noise=0.02, seed=1, irregular=0.0):
+    rng = random.Random(seed)
+    beats = []
+    t = -rng.uniform(0.2, 0.9) * 60 / bpm
+    while t < seconds + 2:
+        beats.append(t)
+        t += 60 / bpm * (1 + rng.gauss(0, 0.02 + irregular))
+    sig, j = [], 0
+    for k in range(seconds * FS):
+        tt = k / FS
+        while beats[j + 1] <= tt:
+            j += 1
+        phase = (tt - beats[j]) / (beats[j + 1] - beats[j])
+        v = _pulse(phase) + 0.12 * math.sin(2 * math.pi * 0.25 * tt + seed) + rng.gauss(0, noise)
+        sig.append(round(v, 3))
+    return sig
+
+def _hr_event(base, peak, rise, hold, fall, seed, start=3.0, noise=1.2, minutes=10):
+    """Heart-rate readings every 10 s. rise/fall are time constants in seconds."""
+    rng = random.Random(seed)
+    t0 = start * 60 - 9
+    out = []
+    for k in range(minutes * 6 + 1):
+        t = k * 10
+        if t < t0:
+            hr = base
+        elif t < t0 + hold:
+            hr = base + (peak - base) * (1 - math.exp(-(t - t0) / rise))
+        else:
+            top = base + (peak - base) * (1 - math.exp(-hold / rise))
+            hr = base + (top - base) * math.exp(-(t - t0 - hold) / fall)
+        out.append(round(hr + rng.gauss(0, noise)))
+    return out
+
+# ---- raw PPG: 10 seconds each ----
+ppg_rest = _make_ppg(72, seed=4)
+ppg_exercise = _make_ppg(138, seed=7)
+ppg_seizure = _make_ppg(126, seed=11, noise=0.04, irregular=0.05)
+ppg_time = [round(i / FS, 2) for i in range(len(ppg_rest))]
+
+# ---- heart-rate trends: one reading every 10 s for 10 minutes ----
+minutes = [round(i / 6, 2) for i in range(61)]
+event_jog = _hr_event(base=76, peak=150, rise=100, hold=300, fall=120, seed=21)
+event_seizure = _hr_event(base=78, peak=150, rise=8, hold=90, fall=90, seed=22)
+
+mysteries = {
+    "A": _hr_event(base=72, peak=148, rise=7, hold=80, fall=80, seed=31),
+    "B": _hr_event(base=80, peak=140, rise=110, hold=330, fall=110, seed=32),
+    "C": _hr_event(base=70, peak=107, rise=2, hold=20, fall=20, seed=33),
+    "D": _hr_event(base=58, peak=88, rise=6, hold=110, fall=70, seed=34),
+}
+
+# ---- plotting helpers (draw in the browser) ----
+import js
+
+def _send(series, x, title, xlabel, ylabel, dots=None, line=None):
+    spec = {"series": series, "x": x, "title": title, "xlabel": xlabel,
+            "ylabel": ylabel, "dots": dots, "line": line}
+    js.drawPlot(json.dumps(spec))
+
+def plot(*lists, labels=None, title="", xlabel="reading number", ylabel="value", line=None):
+    """Draw one or more lists of numbers as lines."""
+    series = []
+    for k, values in enumerate(lists):
+        label = labels[k] if labels and k < len(labels) else None
+        series.append({"y": [float(v) for v in values], "label": label})
+    _send(series, None, title, xlabel, ylabel, line=line)
+
+def plot_ppg(signal, beats=None, title="PPG signal"):
+    """Draw a 10-second PPG signal. Pass beats=[...] to mark the beats you found."""
+    series = [{"y": [float(v) for v in signal], "label": None}]
+    _send(series, ppg_time[:len(signal)], title, "time (seconds)", "light reflected",
+          dots=list(beats) if beats else None)
+
+def plot_hr(*events, labels=None, title="Heart rate", line=None):
+    """Draw heart-rate events (one reading every 10 seconds)."""
+    series = []
+    for k, values in enumerate(events):
+        label = labels[k] if labels and k < len(labels) else None
+        series.append({"y": [float(v) for v in values], "label": label})
+    _send(series, minutes[:max(len(e) for e in events)], title, "time (minutes)",
+          "heart rate (bpm)", line=line)
+</script>
+<script src="https://cdn.jsdelivr.net/npm/pyodide@0.27.7/pyodide.js"></script>
+<script>
+(function () {
+  const BASE = "https://cdn.jsdelivr.net/npm/pyodide@0.27.7/";
+  const store = {
+    get(k) { try { return localStorage.getItem("pulse-detective:" + k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem("pulse-detective:" + k, v); } catch (e) {} },
+    del(k) { try { localStorage.removeItem("pulse-detective:" + k); } catch (e) {} }
+  };
+  const statusEl = document.getElementById("status");
+  const statusText = document.getElementById("status-text");
+  let py = null;
+  let currentOut = null;
+  let busy = Promise.resolve();
+
+  /* ---------- plotting ---------- */
+  const COLORS = ["var(--c1)", "var(--c2)", "var(--c3)", "var(--c4)"];
+  function niceTicks(lo, hi, n) {
+    if (hi === lo) { hi = lo + 1; lo = lo - 1; }
+    const raw = (hi - lo) / n, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= raw);
+    const start = Math.floor(lo / step) * step, ticks = [];
+    for (let v = start; v <= hi + step * 0.5; v += step) ticks.push(+v.toFixed(6));
+    return ticks;
+  }
+  function fmt(v) { return Math.abs(v) >= 100 || Number.isInteger(v) ? String(Math.round(v * 100) / 100) : v.toFixed(Math.abs(v) < 1 ? 2 : 1).replace(/\.?0+$/, ""); }
+  const NS = "http://www.w3.org/2000/svg";
+  function el(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+  window.drawPlot = function (json) {
+    const spec = JSON.parse(json);
+    const W = 720, H = 300, L = 56, R = 16, T = 12, B = 44;
+    const series = spec.series.filter(s => s.y.length);
+    if (!series.length) return;
+    const n = Math.max(...series.map(s => s.y.length));
+    const xs = spec.x || Array.from({ length: n }, (_, i) => i);
+    let ylo = Infinity, yhi = -Infinity;
+    series.forEach(s => s.y.forEach(v => { if (v < ylo) ylo = v; if (v > yhi) yhi = v; }));
+    if (spec.line != null) { ylo = Math.min(ylo, spec.line); yhi = Math.max(yhi, spec.line); }
+    const pad = (yhi - ylo) * 0.08 || 1; ylo -= pad; yhi += pad;
+    const yt = niceTicks(ylo, yhi, 5); ylo = Math.min(ylo, yt[0]); yhi = Math.max(yhi, yt[yt.length - 1]);
+    const xlo = xs[0], xhi = xs[Math.min(n, xs.length) - 1] || 1;
+    const xt = niceTicks(xlo, xhi, 8).filter(v => v >= xlo - 1e-9 && v <= xhi + 1e-9);
+    const sx = v => L + (v - xlo) / (xhi - xlo || 1) * (W - L - R);
+    const sy = v => T + (1 - (v - ylo) / (yhi - ylo)) * (H - T - B);
+    const fig = document.createElement("figure"); fig.className = "plot";
+    if (spec.title) { const t = document.createElement("div"); t.className = "ttl"; t.textContent = spec.title; fig.appendChild(t); }
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": spec.title || "plot" }, fig);
+    yt.forEach(v => {
+      el("line", { x1: L, x2: W - R, y1: sy(v), y2: sy(v), style: "stroke:var(--line);stroke-width:1" }, svg);
+      const t = el("text", { x: L - 8, y: sy(v) + 4, "text-anchor": "end", style: "fill:var(--muted);font:12px var(--font-mono)" }, svg); t.textContent = fmt(v);
+    });
+    xt.forEach(v => {
+      el("line", { x1: sx(v), x2: sx(v), y1: H - B, y2: H - B + 5, style: "stroke:var(--muted)" }, svg);
+      const t = el("text", { x: sx(v), y: H - B + 18, "text-anchor": "middle", style: "fill:var(--muted);font:12px var(--font-mono)" }, svg); t.textContent = fmt(v);
+    });
+    el("line", { x1: L, x2: W - R, y1: H - B, y2: H - B, style: "stroke:var(--muted);stroke-width:1" }, svg);
+    if (spec.xlabel) { const t = el("text", { x: (L + W - R) / 2, y: H - 6, "text-anchor": "middle", style: "fill:var(--muted);font:13px var(--font-body)" }, svg); t.textContent = spec.xlabel; }
+    if (spec.ylabel) { const t = el("text", { x: 14, y: (T + H - B) / 2, "text-anchor": "middle", transform: `rotate(-90 14 ${(T + H - B) / 2})`, style: "fill:var(--muted);font:13px var(--font-body)" }, svg); t.textContent = spec.ylabel; }
+    if (spec.line != null) el("line", { x1: L, x2: W - R, y1: sy(spec.line), y2: sy(spec.line), style: "stroke:var(--warn);stroke-width:1.5;stroke-dasharray:6 4" }, svg);
+    series.forEach((s, k) => {
+      const d = s.y.map((v, i) => (i ? "L" : "M") + sx(xs[i]).toFixed(1) + " " + sy(v).toFixed(1)).join("");
+      el("path", { d, style: `fill:none;stroke:${COLORS[k % 4]};stroke-width:${n > 100 ? 1.8 : 2.4};stroke-linejoin:round;stroke-linecap:round` }, svg);
+      if (n <= 70 && series.length === 1) s.y.forEach((v, i) => el("circle", { cx: sx(xs[i]), cy: sy(v), r: 2.6, style: `fill:${COLORS[k % 4]}` }, svg));
+    });
+    if (spec.dots) spec.dots.forEach(i => { if (i >= 0 && i < series[0].y.length) el("circle", { cx: sx(xs[i]), cy: sy(series[0].y[i]), r: 5.5, style: "fill:none;stroke:var(--c2);stroke-width:2.5" }, svg); });
+    const labelled = series.filter(s => s.label);
+    if (labelled.length) {
+      const lg = document.createElement("div"); lg.className = "legend";
+      series.forEach((s, k) => { if (!s.label) return; const sp = document.createElement("span"); sp.style.setProperty("--sw", COLORS[k % 4]); sp.textContent = s.label; lg.appendChild(sp); });
+      fig.appendChild(lg);
+    }
+    (currentOut || document.body).appendChild(fig);
+  };
+
+  /* ---------- output helpers ---------- */
+  function addText(out, text) {
+    let pre = out.lastElementChild;
+    if (!pre || pre.tagName !== "PRE" || pre.dataset.kind !== "stdout") { pre = document.createElement("pre"); pre.dataset.kind = "stdout"; out.appendChild(pre); }
+    pre.textContent += text + "\n";
+  }
+  function friendly(msg) {
+    const lines = msg.trim().split("\n");
+    const last = lines[lines.length - 1];
+    let lineNo = null;
+    for (const l of lines) { const m = l.match(/File "<exec>", line (\d+)/); if (m) lineNo = m[1]; }
+    let tip = "Read the last line of the error. It usually says what went wrong.";
+    if (/___/.test(last)) tip = "You still have a blank ___ to fill in.";
+    else if (/^NameError/.test(last)) tip = "Python doesn't know that name. Check the spelling, or run the cells above this one first.";
+    else if (/^IndentationError|^TabError/.test(last)) tip = "Spaces at the start of a line matter. Lines inside def, for and if must be indented the same amount.";
+    else if (/^SyntaxError/.test(last)) tip = "Python can't read this line. Look for a missing bracket, quote mark or a colon : at the end of def/for/if.";
+    else if (/^IndexError/.test(last)) tip = "You asked for an item that isn't in the list. Remember Python counts from 0.";
+    else if (/^TypeError/.test(last)) tip = "Mixing types, like adding text to a number? Use str(number) to turn a number into text.";
+    return { title: (lineNo ? "Problem on line " + lineNo + ": " : "") + tip, detail: last };
+  }
+  function addError(out, msg) {
+    const f = friendly(msg);
+    const box = document.createElement("div"); box.className = "err";
+    box.textContent = f.title;
+    const pre = document.createElement("pre"); pre.textContent = f.detail; box.appendChild(pre);
+    out.appendChild(box);
+  }
+
+  /* ---------- cells ---------- */
+  const cells = [];
+  function autosize(ta) { ta.style.height = "auto"; ta.style.height = (ta.scrollHeight + 4) + "px"; }
+  document.querySelectorAll(".cell").forEach((cell, idx) => {
+    const ta = cell.querySelector("textarea");
+    const id = cell.dataset.id;
+    const original = ta.value;
+    ta.id = "code-" + id;
+    ta.setAttribute("aria-label", "Code cell " + (idx + 1));
+    const saved = store.get("code:" + id);
+    if (saved !== null) ta.value = saved;
+    const bar = document.createElement("div"); bar.className = "cell-bar";
+    bar.innerHTML = `<span class="label">cell ${idx + 1}</span><button class="ghost reset" type="button">Reset</button><button class="run" type="button" disabled>▶ Run</button>`;
+    cell.insertBefore(bar, ta);
+    const out = document.createElement("div"); out.className = "out"; out.setAttribute("aria-live", "polite"); cell.appendChild(out);
+    const runBtn = bar.querySelector(".run");
+    const c = { cell, ta, out, runBtn, sec: cell.dataset.sec, run: () => runCell(c) };
+    cells.push(c);
+    runBtn.addEventListener("click", c.run);
+    bar.querySelector(".reset").addEventListener("click", () => { ta.value = original; store.del("code:" + id); autosize(ta); out.innerHTML = ""; cell.classList.remove("ran", "errored"); });
+    ta.addEventListener("input", () => { autosize(ta); store.set("code:" + id, ta.value); });
+    ta.addEventListener("keydown", e => {
+      if (e.key === "Enter" && (e.shiftKey || e.ctrlKey || e.metaKey)) { e.preventDefault(); c.run(); return; }
+      if (e.key === "Tab" && !e.shiftKey) {
+        e.preventDefault();
+        const s = ta.selectionStart, en = ta.selectionEnd;
+        ta.setRangeText("    ", s, en, "end"); ta.dispatchEvent(new Event("input"));
+      }
+      if (e.key === "Enter" && !e.shiftKey) {
+        // keep indentation, add 4 after a colon
+        const s = ta.selectionStart; const before = ta.value.slice(0, s);
+        const line = before.slice(before.lastIndexOf("\n") + 1);
+        let indent = line.match(/^ */)[0]; if (/:\s*$/.test(line)) indent += "    ";
+        e.preventDefault(); ta.setRangeText("\n" + indent, s, ta.selectionEnd, "end"); ta.dispatchEvent(new Event("input"));
+      }
+    });
+    requestAnimationFrame(() => autosize(ta));
+  });
+  window.addEventListener("resize", () => cells.forEach(c => autosize(c.ta)));
+
+  function markSection(sec) {
+    const a = document.querySelector(`#toc a[href="#${sec}"]`);
+    if (a) a.parentElement.classList.add("done");
+  }
+
+  function runCell(c) {
+    if (!py) return;
+    busy = busy.then(async () => {
+      c.runBtn.disabled = true; c.out.innerHTML = ""; currentOut = c.out;
+      c.cell.classList.remove("ran", "errored");
+      try {
+        const res = await py.runPythonAsync(c.ta.value);
+        if (res !== undefined && res !== null) {
+          addText(c.out, String(res));
+          if (res && typeof res.destroy === "function") res.destroy();
+        }
+        c.cell.classList.add("ran"); markSection(c.sec);
+      } catch (err) {
+        addError(c.out, String(err.message || err)); c.cell.classList.add("errored");
+      } finally {
+        currentOut = null; c.runBtn.disabled = false;
+      }
+    });
+    return busy;
+  }
+  window.__runAll = async () => { for (const c of cells) await runCell(c); };
+
+  /* ---------- quizzes ---------- */
+  document.querySelectorAll(".quiz").forEach(q => {
+    const input = q.querySelector("input"), fb = q.querySelector(".fb"), btn = q.querySelector("button");
+    const ans = +q.dataset.answer, tol = +q.dataset.tol;
+    const check = () => {
+      const v = parseFloat(input.value);
+      if (isNaN(v)) { fb.textContent = "Type a number first."; fb.className = "fb bad"; return; }
+      if (Math.abs(v - ans) <= tol) { fb.textContent = tol ? `Yes! The answer is about ${ans}.` : "Correct!"; fb.className = "fb good"; }
+      else { fb.textContent = v < ans ? "Not quite. Try a bit higher, and check your output." : "Not quite. Try a bit lower, and check your output."; fb.className = "fb bad"; }
+    };
+    btn.addEventListener("click", check);
+    input.addEventListener("keydown", e => { if (e.key === "Enter") check(); });
+  });
+
+  /* ---------- mystery cases ---------- */
+  const CASES = [
+    { id: "A", when: "Tue 4:12 pm", seizure: true, story: "A seizure. Sam's teacher saw it happen in class. Heart rate shot up by over 50 bpm in 10 seconds while Sam was sitting still." },
+    { id: "B", when: "Wed 5:30 pm", seizure: false, story: "Basketball training. The heart rate climbed slowly over several minutes, just like the jog." },
+    { id: "C", when: "Fri 9:47 pm", seizure: false, story: "A jump-scare in a horror movie! Fright releases adrenaline, which makes the heart jump fast. But it calmed down within a minute. If your alarm said ALERT, that's a false alarm." },
+    { id: "D", when: "Sat 3:05 am", seizure: true, story: "A seizure during sleep, caught on a bedroom camera. The jump was smaller (about 23 bpm) because Sam's heart started slow, but it stayed high for over 2 minutes. With a threshold of 30, your alarm would miss it." }
+  ];
+  const casesEl = document.getElementById("cases");
+  CASES.forEach(cs => {
+    const card = document.createElement("div"); card.className = "case";
+    card.innerHTML = `<h4>Event ${cs.id} <small>${cs.when}</small></h4>
+      <div class="choice" role="group" aria-label="Your call for event ${cs.id}">
+        <button type="button" data-v="1" aria-pressed="false">Seizure</button>
+        <button type="button" data-v="0" aria-pressed="false">Not a seizure</button>
+      </div>
+      <button type="button" class="ghost rev" disabled>Reveal what happened</button>
+      <div class="reveal" hidden></div>`;
+    const btns = card.querySelectorAll(".choice button"), rev = card.querySelector(".rev"), box = card.querySelector(".reveal");
+    let pick = store.get("case:" + cs.id);
+    const show = () => btns.forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === pick)));
+    if (pick !== null) { show(); rev.disabled = false; }
+    btns.forEach(b => b.addEventListener("click", () => { pick = b.dataset.v; store.set("case:" + cs.id, pick); show(); rev.disabled = false; box.hidden = true; }));
+    rev.addEventListener("click", () => {
+      const right = (pick === "1") === cs.seizure;
+      box.className = "reveal " + (right ? "yes" : "no");
+      box.innerHTML = `<b>${right ? "You got it." : "Not this time."} It was ${cs.seizure ? "a seizure" : "not a seizure"}.</b>`;
+      box.appendChild(document.createTextNode(cs.story));
+      box.hidden = false; markSection("mystery");
+    });
+    casesEl.appendChild(card);
+  });
+
+  /* ---------- reflection ---------- */
+  const th = document.getElementById("thoughts");
+  const savedT = store.get("thoughts"); if (savedT) th.value = savedT;
+  th.addEventListener("input", () => { store.set("thoughts", th.value); if (th.value.trim().length > 20) markSection("reflect"); });
+
+  /* ---------- boot python ---------- */
+  async function boot() {
+    try {
+      if (typeof loadPyodide !== "function") throw new Error("Python engine script did not load");
+      py = await loadPyodide({ indexURL: BASE });
+      py.setStdout({ batched: s => { if (currentOut) addText(currentOut, s); } });
+      py.setStderr({ batched: s => { if (currentOut) addText(currentOut, s); } });
+      await py.runPythonAsync(document.getElementById("setup-py").textContent);
+      statusEl.classList.add("ready"); statusText.textContent = "Python ready";
+      cells.forEach(c => c.runBtn.disabled = false);
+      window.__ready = true;
+    } catch (e) {
+      statusEl.classList.add("fail");
+      statusText.textContent = "Python couldn't start. Check your internet connection and reload the page.";
+      console.error(e); window.__bootError = String(e);
+    }
+  }
+  boot();
+})();
+</script>
+
+</body>
+</html>

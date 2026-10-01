@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pulse Detective</title>
+<meta name="description" content="A 45-minute Python workshop for high school students: read smartwatch heart data and decide whether a patient had a seizure or was just exercising.">
+<meta property="og:title" content="Pulse Detective">
+<meta property="og:description" content="Was it a seizure, or just a run? A free in-browser Python workshop with wearable heart data.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2034%2034%22%3E%3Crect%20width%3D%2234%22%20height%3D%2234%22%20rx%3D%229%22%20fill%3D%22%23c42f4c%22/%3E%3Cpath%20d%3D%22M4%2019h6l3-9%204%2015%203-9%202%203h8%22%20fill%3D%22none%22%20stroke%3D%22%23fff%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@400&display=swap">
+<style>
+/* Layout: one dark full-width band with the live pulse trace as the hero, then a quiet light strip of practical info */
+:root {
+  --ink: #132232; --paper: #eef3f7; --surface: #ffffff; --muted: #566577; --line: #d3dde7;
+  --accent: #c42f4c; --on-accent: #ffffff; --soft: #bfcddb; --hero-accent: #ff8da1;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --paper: #0f1822; --surface: #16222f; --muted: #9aaabb; --line: #2a3a4b; color-scheme: dark; }
+  .info { color: #e6edf4; }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 18px; line-height: 1.6; }
+.hero { background: var(--ink); color: var(--paper); position: relative; overflow: hidden; }
+@media (prefers-color-scheme: dark) { .hero { background: #0a121b; color: #eef3f7; } }
+.hero-in { max-width: 1040px; margin: 0 auto; padding-inline: 24px; padding-block: calc(env(safe-area-inset-top, 0px) + 56px) 72px; display: grid; gap: 22px; position: relative; z-index: 1; }
+.eyebrow { font-family: var(--font-mono); font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--hero-accent); }
+h1 { font-family: var(--font-display); font-weight: 800; font-size: clamp(48px, 9vw, 104px); line-height: .95; letter-spacing: -0.03em; margin: 0; }
+.sub { font-size: clamp(20px, 2.6vw, 26px); color: var(--soft); max-width: 34ch; margin: 0; text-wrap: balance; }
+canvas { display: block; width: 100%; height: 150px; }
+.cta { display: flex; flex-wrap: wrap; gap: 14px 20px; align-items: center; }
+.start { display: inline-flex; align-items: center; gap: 10px; background: var(--accent); color: var(--on-accent); font-weight: 700; font-size: 21px; text-decoration: none; border-radius: 10px; padding: 14px 26px; }
+.start:hover { filter: brightness(1.08); }
+.start:focus-visible { outline: 3px solid var(--hero-accent); outline-offset: 3px; }
+.engine { font-size: 15px; color: var(--soft); display: inline-flex; gap: 8px; align-items: center; }
+.engine .dot { width: 8px; height: 8px; border-radius: 50%; background: #f0b04a; }
+.engine.ready .dot { background: #4ccfa6; }
+.info { max-width: 1040px; margin: 0 auto; padding-inline: 24px; padding-block: 48px 64px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; }
+@media (max-width: 760px) { .info { grid-template-columns: minmax(0, 1fr); gap: 24px; } }
+.info h2 { font-family: var(--font-display); font-weight: 600; font-size: 21px; margin: 0 0 6px; }
+.info p, .info ul { margin: 0; color: var(--muted); font-size: 17px; }
+.info ul { padding-left: 20px; }
+footer { max-width: 1040px; margin: 0 auto; padding-inline: 24px; padding-block: 20px 40px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+@media (prefers-reduced-motion: reduce) { canvas { display: none; } }
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-in">
+    <div class="eyebrow">Wearables + Python · 45-minute workshop</div>
+    <h1>Pulse<br>Detective</h1>
+    <p class="sub">Was it a seizure, or just a run? Write Python that reads a smartwatch and helps a patient.</p>
+    <div class="cta">
+      <a class="start" href="workshop.html">Start the workshop →</a>
+      <span class="engine" id="engine"><span class="dot"></span><span id="engine-text">Getting Python ready in the background…</span></span>
+    </div>
+  </div>
+  <canvas id="trace" aria-hidden="true"></canvas>
+</header>
+
+<section class="info">
+  <div>
+    <h2>What you'll do</h2>
+    <p>Count heartbeats in real-looking smartwatch data, spot how a seizure differs from exercise, and build an alarm. Then test it on four mystery events.</p>
+  </div>
+  <div>
+    <h2>What you need</h2>
+    <ul>
+      <li>A laptop with internet</li>
+      <li>Chrome, Edge, Firefox or Safari</li>
+      <li>No coding experience, nothing to install</li>
+    </ul>
+  </div>
+  <div>
+    <h2>Good to know</h2>
+    <p>Your code is saved in this browser, so you can reload without losing work. All patient data on this site is simulated.</p>
+  </div>
+</section>
+
+<footer>Made by Dr Rachel Stirling, Department of Biomedical Engineering, University of Melbourne.</footer>
+
+<script>
+(function () {
+  // Live PPG trace across the hero
+  const c = document.getElementById("trace"), ctx = c.getContext("2d");
+  const g = (p, m, sd) => Math.exp(-Math.pow((p - m) / sd, 2) / 2);
+  const pulse = p => g(p, 0.22, 0.07) + 0.38 * g(p, 0.52, 0.09);
+  let w = 0, h = 0, dpr = 1;
+  function size() { dpr = window.devicePixelRatio || 1; w = c.clientWidth; h = c.clientHeight; c.width = w * dpr; c.height = h * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
+  size(); addEventListener("resize", size);
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function frame(t) {
+    ctx.clearRect(0, 0, w, h);
+    const period = 150, shift = still ? 0 : t * 0.09;
+    ctx.beginPath();
+    for (let x = 0; x <= w; x += 2) {
+      const ph = (((x + shift) / period) % 1 + 1) % 1;
+      const y = h - 18 - pulse(ph) * (h - 40);
+      x ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.strokeStyle = "#c42f4c"; ctx.lineWidth = 3; ctx.lineJoin = "round"; ctx.stroke();
+    if (!still) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // Preload the Python engine so the workshop opens fast
+  const label = document.getElementById("engine-text"), box = document.getElementById("engine");
+  const files = ["pyodide.js", "pyodide.asm.js", "pyodide.asm.wasm", "python_stdlib.zip", "pyodide-lock.json"];
+  Promise.all(files.map(f => fetch("https://cdn.jsdelivr.net/npm/pyodide@0.27.7/" + f).then(r => { if (!r.ok) throw 0; return r.arrayBuffer(); })))
+    .then(() => { box.classList.add("ready"); label.textContent = "Python is ready"; })
+    .catch(() => { label.textContent = "Python will load when you start"; });
+})();
+</script>
+</body>
+</html>
