@@ -6,9 +6,9 @@
 <style>html,body{margin:0}[hidden]{display:none!important}</style>
 </head>
 <body>
-<title>Pulse Detective</title>
+<title>Detecting seizures with wearables</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2034%2034%22%3E%3Crect%20width%3D%2234%22%20height%3D%2234%22%20rx%3D%229%22%20fill%3D%22%23c42f4c%22/%3E%3Cpath%20d%3D%22M4%2019h6l3-9%204%2015%203-9%202%203h8%22%20fill%3D%22none%22%20stroke%3D%22%23fff%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E">
-<meta name="description" content="Pulse Detective workshop: count heartbeats in PPG data and build a seizure alarm in Python.">
+<meta name="description" content="Detecting seizures with wearables: a workshop to count heartbeats in PPG data and build a seizure alarm in Python.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@400;600&display=swap">
@@ -61,7 +61,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
 
 /* rail */
 .rail { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; display: grid; gap: 18px; }
-.brand { font-family: var(--font-display); font-weight: 800; font-size: 22px; letter-spacing: -0.01em; line-height: 1.1; display: flex; align-items: center; gap: 10px; }
+.brand { font-family: var(--font-display); font-weight: 800; font-size: 20px; letter-spacing: -0.01em; line-height: 1.1; display: flex; align-items: center; gap: 10px; }
 .brand svg { flex: none; }
 a.brand { color: inherit; text-decoration: none; }
 .status { font-size: 14px; padding: 8px 12px; border-radius: 8px; background: var(--warn-soft); color: var(--warn); display: flex; gap: 8px; align-items: center; }
@@ -82,7 +82,7 @@ a.brand { color: inherit; text-decoration: none; }
 main { min-width: 0; display: grid; gap: 56px; }
 .hero { display: grid; gap: 14px; }
 .eyebrow { font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--accent); }
-h1 { font-family: var(--font-display); font-weight: 800; font-size: clamp(34px, 6vw, 54px); line-height: 1.02; letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+h1 { font-family: var(--font-display); font-weight: 800; font-size: clamp(30px, 5vw, 46px); line-height: 1.02; letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
 h2 { font-family: var(--font-display); font-weight: 800; font-size: clamp(25px, 3.4vw, 32px); line-height: 1.1; letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
 h3 { font-family: var(--font-display); font-weight: 600; font-size: 20px; margin: 8px 0 0; }
 p { margin: 0; max-width: 66ch; }
@@ -165,7 +165,7 @@ footer { color: var(--muted); font-size: 14px; border-top: 1px solid var(--line)
   <aside class="rail">
     <a class="brand" href="index.html" title="Back to start">
       <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><rect width="34" height="34" rx="9" style="fill:var(--accent)"/><path d="M4 19h6l3-9 4 15 3-9 2 3h8" style="fill:none;stroke:#fff;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round"/></svg>
-      Pulse Detective
+      Detecting seizures with wearables
     </a>
     <div class="status" id="status" role="status"><span class="dot"></span><span id="status-text">Starting Python…</span></div>
     <ol id="toc">
@@ -183,7 +183,7 @@ footer { color: var(--muted); font-size: 14px; border-top: 1px solid var(--line)
   <main>
     <header class="hero">
       <div class="eyebrow">Wearables + Python · 45-minute workshop</div>
-      <h1>Was it a seizure, or just a run?</h1>
+      <h1>Was it a seizure, or just a normal event like elevated heart rate from a run?</h1>
       <p class="lede">You're a data scientist at a health-tech company. A patient's smartwatch keeps flagging spikes in heart rate. Your job is to write Python that reads the watch's sensor and decides which spikes need a doctor.</p>
       <div class="patient">
         <div class="avatar" aria-hidden="true">S</div>
@@ -244,13 +244,17 @@ plot(readings, title="My first heart-rate plot", ylabel="bpm")</textarea></div>
     <section id="ppg">
       <div class="sec-head"><h2>2 · Meet the PPG</h2><span class="mins">6 min</span></div>
       <p><b>PPG</b> (photoplethysmography) is the green light on the back of a smartwatch. Every heartbeat pushes a pulse of blood through your wrist. More blood absorbs more light, so the sensor sees a wave: <b>one bump = one heartbeat</b>.</p>
-      <p>We loaded 10 seconds of Sam's PPG while sitting on the couch. It's stored in a list called <code>ppg_rest</code>, with 25 readings every second.</p>
+      <p>We loaded 10 seconds of Sam's PPG while sitting on the couch. It's stored in a list called <code>ppg_rest</code>, with 25 readings every second. Each reading is one number: how much light bounced back at that moment. The <b style="color:var(--c2)">red dots</b> on the plots show where the first 5 readings sit on the wave.</p>
       <div class="cell" data-sec="ppg" data-id="c3"><textarea class="code" spellcheck="false">print("Number of readings:", len(ppg_rest))
 print("First 5 readings:", ppg_rest[:5])
 
-plot_ppg(ppg_rest, title="Sam resting: 10 seconds of PPG")</textarea></div>
+# The red dots mark the first 5 readings printed above
+plot_ppg(ppg_rest, highlight=[0, 1, 2, 3, 4], title="Sam resting: 10 seconds of PPG")
+
+# Zoom in on the first second (25 readings) to see them clearly
+plot_ppg(ppg_rest[:25], highlight=[0, 1, 2, 3, 4], title="Zoomed in: the first second")</textarea></div>
       <ul class="tasks">
-        <li>Count the <b>tall</b> peaks in the plot by eye. Ignore the small bump after each one (that's the heart valve closing).</li>
+        <li>Count the <b>tall</b> peaks in the 10-second plot by eye. Ignore the small bump after each one (that's the heart valve closing).</li>
         <li>That's beats in 10 seconds. Multiply by 6 to get beats per minute.</li>
       </ul>
       <div class="quiz" data-answer="72" data-tol="6">
@@ -273,13 +277,16 @@ plot_ppg(ppg_rest, title="Sam resting: 10 seconds of PPG")</textarea></div>
         <li>bigger than the reading just after it, <b>and</b></li>
         <li>above a <b>threshold</b> (so the small bumps don't count).</li>
       </ul>
-      <p>The <code>for</code> loop below checks every reading one by one. Fill in the blank <code>___</code> with the name of the threshold variable, then run it.</p>
-      <div class="cell" data-sec="beats" data-id="c5"><textarea class="code" spellcheck="false">def find_beats(signal, threshold=0.7):
+      <p>The <b>threshold</b> is a cut-off height: a peak only counts as a heartbeat if it is taller than this number. The <code>for</code> loop below checks every reading one by one.</p>
+      <p class="note"><b>Clue:</b> look at the numbers on the y-axis of Sam's resting plot in section 2. The small bumps never go above about <b>0.5</b>. The tall peaks are higher, but in the jogging and seizure recordings some only reach about <b>0.7</b>. So pick a number between 0.5 and 0.7: taller than every small bump, shorter than every tall peak. Type it in place of <code>___</code> on the first line, then run the cell.</p>
+      <div class="cell" data-sec="beats" data-id="c5"><textarea class="code" spellcheck="false">PEAK_THRESHOLD = ___     # type your threshold number here
+
+def find_beats(signal):
     beats = []
     for i in range(1, len(signal) - 1):
         bigger_than_before = signal[i] > signal[i - 1]
         bigger_than_after = signal[i] > signal[i + 1]
-        tall_enough = signal[i] > ___
+        tall_enough = signal[i] > PEAK_THRESHOLD
         if bigger_than_before and bigger_than_after and tall_enough:
             beats.append(i)       # remember where the beat was
     return beats
@@ -287,16 +294,17 @@ plot_ppg(ppg_rest, title="Sam resting: 10 seconds of PPG")</textarea></div>
 beats = find_beats(ppg_rest)
 print("Beats found:", len(beats))
 print("Heart rate:", len(beats) * 6, "bpm")
-plot_ppg(ppg_rest, beats=beats, title="Beats the computer found")</textarea></div>
-      <details class="hint"><summary>Stuck?</summary><div>The threshold is called <code>threshold</code>. So the line should read <code>tall_enough = signal[i] &gt; threshold</code>. Python is fussy: spaces at the start of a line matter, and so do colons <code>:</code> at the end of <code>def</code>, <code>for</code> and <code>if</code>.</div></details>
-      <p>Did the computer agree with your count? Now use your function on the other two recordings.</p>
+plot_ppg(ppg_rest, beats=beats, line=PEAK_THRESHOLD,
+         title="Beats the computer found (dashed line = your threshold)")</textarea></div>
+      <details class="hint"><summary>Stuck?</summary><div>Any number from 0.55 to 0.7 works, for example <code>PEAK_THRESHOLD = 0.6</code>. Check the plot: every tall peak should have a red circle, no small bump should, and the dashed line should sit between them. Python is fussy: spaces at the start of a line matter, and so do colons <code>:</code> at the end of <code>def</code>, <code>for</code> and <code>if</code>.</div></details>
+      <p>Did the computer agree with your count? Now that you have built a way to detect these peaks, we will use this function on the other two recordings (seizure and exercise) to detect Exercise (or Seizure) heart rate peaks which we will multiply by 6 to get beats per minute. Try for both variables.</p>
       <div class="cell" data-sec="beats" data-id="c6"><textarea class="code" spellcheck="false">exercise_beats = find_beats(ppg_exercise)
 print("Exercise heart rate:", len(exercise_beats) * 6, "bpm")
 
 # Do the same for ppg_seizure:
 </textarea></div>
       <ul class="tasks">
-        <li><b>Experiment:</b> try <code>find_beats(ppg_rest, threshold=0.3)</code>. What goes wrong? Why do we need a threshold?</li>
+        <li><b>Experiment:</b> change <code>PEAK_THRESHOLD</code> to <code>0.3</code> and run that cell again. What goes wrong? Why do we need a threshold? (Change it back afterwards.)</li>
       </ul>
       <p class="note"><b>Problem:</b> exercise and seizure both give a heart rate above 120 bpm. A single snapshot can't tell them apart. Doctors look at <b>how the heart rate changes over time</b>.</p>
     </section>
@@ -398,7 +406,7 @@ plot_hr(mysteries["A"], title="Event A")</textarea></div>
           <tr><td>if a &gt; b:  else:</td><td>make a decision</td></tr>
           <tr><td>def name(input):</td><td>make your own function; <code>return</code> sends the answer back</td></tr>
           <tr><td>plot(list)</td><td>draw any list of numbers</td></tr>
-          <tr><td>plot_ppg(signal, beats=…)</td><td>draw 10 s of PPG, optionally marking beats</td></tr>
+          <tr><td>plot_ppg(signal, beats=…, highlight=…)</td><td>draw 10 s of PPG; circle the beats, or put red dots on chosen readings</td></tr>
           <tr><td>plot_hr(a, b, labels=[…])</td><td>draw heart-rate events over 10 minutes</td></tr>
         </table></div>
       </details>
@@ -471,9 +479,9 @@ mysteries = {
 # ---- plotting helpers (draw in the browser) ----
 import js
 
-def _send(series, x, title, xlabel, ylabel, dots=None, line=None):
+def _send(series, x, title, xlabel, ylabel, dots=None, line=None, highlight=None):
     spec = {"series": series, "x": x, "title": title, "xlabel": xlabel,
-            "ylabel": ylabel, "dots": dots, "line": line}
+            "ylabel": ylabel, "dots": dots, "line": line, "highlight": highlight}
     js.drawPlot(json.dumps(spec))
 
 def plot(*lists, labels=None, title="", xlabel="reading number", ylabel="value", line=None):
@@ -484,11 +492,13 @@ def plot(*lists, labels=None, title="", xlabel="reading number", ylabel="value",
         series.append({"y": [float(v) for v in values], "label": label})
     _send(series, None, title, xlabel, ylabel, line=line)
 
-def plot_ppg(signal, beats=None, title="PPG signal"):
-    """Draw a 10-second PPG signal. Pass beats=[...] to mark the beats you found."""
+def plot_ppg(signal, beats=None, title="PPG signal", highlight=None, line=None):
+    """Draw a 10-second PPG signal. Pass beats=[...] to circle the beats you found,
+    highlight=[...] to put red dots on chosen readings, line=number for a dashed line."""
     series = [{"y": [float(v) for v in signal], "label": None}]
     _send(series, ppg_time[:len(signal)], title, "time (seconds)", "light reflected",
-          dots=list(beats) if beats else None)
+          dots=list(beats) if beats else None, line=line,
+          highlight=list(highlight) if highlight else None)
 
 def plot_hr(*events, labels=None, title="Heart rate", line=None):
     """Draw heart-rate events (one reading every 10 seconds)."""
@@ -563,6 +573,7 @@ def plot_hr(*events, labels=None, title="Heart rate", line=None):
       el("path", { d, style: `fill:none;stroke:${COLORS[k % 4]};stroke-width:${n > 100 ? 1.8 : 2.4};stroke-linejoin:round;stroke-linecap:round` }, svg);
       if (n <= 70 && series.length === 1) s.y.forEach((v, i) => el("circle", { cx: sx(xs[i]), cy: sy(v), r: 2.6, style: `fill:${COLORS[k % 4]}` }, svg));
     });
+    if (spec.highlight) spec.highlight.forEach(i => { if (i >= 0 && i < series[0].y.length) el("circle", { cx: sx(xs[i]), cy: sy(series[0].y[i]), r: n > 100 ? 4 : 5.5, style: "fill:var(--c2);stroke:var(--surface);stroke-width:1.5" }, svg); });
     if (spec.dots) spec.dots.forEach(i => { if (i >= 0 && i < series[0].y.length) el("circle", { cx: sx(xs[i]), cy: sy(series[0].y[i]), r: 5.5, style: "fill:none;stroke:var(--c2);stroke-width:2.5" }, svg); });
     const labelled = series.filter(s => s.label);
     if (labelled.length) {

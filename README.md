@@ -1,4 +1,4 @@
-# Pulse Detective
+# Detecting seizures with wearables
 
 A 45-minute in-browser Python workshop for high school students. Students count heartbeats in simulated smartwatch (PPG) data, compare exercise with seizures, and build a simple seizure alarm.
 
